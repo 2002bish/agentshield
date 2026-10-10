@@ -6,13 +6,13 @@
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Type
+from typing import Any, Dict, List, Optional, Type
 
 from agentshield.attacks.base import BaseAttack, Finding, Severity
 
 # Import all 7 production-grade attack modules
 from agentshield.attacks.prompt_injection import DirectPromptInjection
-from agentshield.attacks.indirect_prompt import IndirectPromptInjection
+from agentshield.attacks.indirect_injection import IndirectPromptInjection
 from agentshield.attacks.tool_hijacking import ToolHijacking
 from agentshield.attacks.privilege_escalation import PrivilegeEscalation
 from agentshield.attacks.memory_poisoning import MemoryPoisoning
@@ -29,7 +29,11 @@ class AgentScanner:
     all registered attack categories.
     """
 
-    def __init__(self, target: Any, attack_classes: List[Type[BaseAttack]] = None):
+    def __init__(
+        self,
+        target: Any,
+        attack_classes: Optional[List[Type[BaseAttack]]] = None,
+    ):
         """
         Args:
             target: The agent wrapper object that implements a query(payload) method.
@@ -39,15 +43,19 @@ class AgentScanner:
         self.target = target
         
         # Register all core attack vectors
-        self.attack_classes = attack_classes or [
-            DirectPromptInjection,
-            IndirectPromptInjection,
-            ToolHijacking,
-            PrivilegeEscalation,
-            MemoryPoisoning,
-            TOCTOUAttack,
-            MultiAgentCompromise,
-        ]
+        self.attack_classes = (
+            attack_classes
+            if attack_classes is not None
+            else [
+                DirectPromptInjection,
+                IndirectPromptInjection,
+                ToolHijacking,
+                PrivilegeEscalation,
+                MemoryPoisoning,
+                TOCTOUAttack,
+                MultiAgentCompromise,
+            ]
+        )
 
     def run_scan(self) -> Dict[str, Any]:
         """
@@ -55,28 +63,32 @@ class AgentScanner:
         findings, calculates safety ratings, and produces a structured JSON report.
         """
         logger.info(f"Starting AgentShield security scan. Total attack modules queued: {len(self.attack_classes)}")
-        start_time = time.time()
+        start_time = time.perf_counter()
         
         findings: List[Finding] = []
 
         for attack_cls in self.attack_classes:
-            attack_instance = attack_cls()
-            logger.info(f"Executing module: {attack_instance.name} (OWASP: {attack_instance.owasp_id})")
-            
             try:
-                # Production guard: Run attack module with individual error containment
+                attack_instance = attack_cls()
+                logger.info(
+                    "Executing module: %s (OWASP: %s)",
+                    attack_instance.name,
+                    attack_instance.owasp_id,
+                )
                 finding = attack_instance.run(self.target)
                 findings.append(finding)
-            except Exception as e:
-                logger.error(f"Attack module '{attack_cls.__name__}' encountered a fatal error: {str(e)}")
-                # Append a fallback informational finding so the report template remains intact
+            except Exception as exc:
+                logger.exception(
+                    "Attack module '%s' encountered a fatal error",
+                    attack_cls.__name__,
+                )
                 findings.append(
                     Finding(
                         attack_name=getattr(attack_cls, "name", attack_cls.__name__),
                         severity=Severity.INFO,
                         score=0.0,
                         description="Attack module execution failed due to an unexpected exception.",
-                        evidence=str(e),
+                        evidence=str(exc),
                         agent_response="N/A",
                         owasp_id=getattr(attack_cls, "owasp_id", "UNKNOWN"),
                         cwe_id=getattr(attack_cls, "cwe_id", "UNKNOWN"),
@@ -84,7 +96,7 @@ class AgentScanner:
                     )
                 )
 
-        duration = round(time.time() - start_time, 2)
+        duration = round(time.perf_counter() - start_time, 2)
         report = self._generate_report(findings, duration)
         
         logger.info(
