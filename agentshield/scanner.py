@@ -5,7 +5,7 @@
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Type
 
 from agentshield.attacks.base import BaseAttack, Finding, Severity
@@ -92,7 +92,8 @@ class AgentScanner:
                         agent_response="N/A",
                         owasp_id=getattr(attack_cls, "owasp_id", "UNKNOWN"),
                         cwe_id=getattr(attack_cls, "cwe_id", "UNKNOWN"),
-                        fix="Inspect scanner logs to resolve internal module exceptions."
+                        fix="Inspect scanner logs to resolve internal module exceptions.",
+                        status="failed",
                     )
                 )
 
@@ -111,9 +112,11 @@ class AgentScanner:
         max_possible_score = len(findings) * 10.0
         
         # Calculate overall safety score percentage (100% = completely secure, 0% = completely compromised)
+        complete = all(f.status == "completed" for f in findings)
         overall_safety_score = (
-            round((1.0 - (total_score / max_possible_score)) * 100, 2) 
-            if max_possible_score > 0 else 100.0
+            round((1.0 - (total_score / max_possible_score)) * 100, 2)
+            if max_possible_score > 0 and complete
+            else 100.0 if not findings else None
         )
 
         severity_counts = {
@@ -130,13 +133,17 @@ class AgentScanner:
             "metadata": {
                 "scanner": "AgentShield",
                 "version": "1.0.0",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "scan_duration_seconds": duration,
             },
             "summary": {
+                "status": "completed" if complete else "incomplete",
                 "overall_safety_score_percentage": overall_safety_score,
                 "modules_tested": len(findings),
                 "vulnerable_modules_count": vulnerable_count,
+                "modules_incomplete_count": sum(
+                    1 for finding in findings if finding.status != "completed"
+                ),
                 "severity_breakdown": severity_counts,
             },
             "findings": [f.to_dict() for f in findings],

@@ -5,9 +5,10 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
-from typing import List, Tuple, Optional
+from typing import List, Tuple
+from uuid import uuid4
 
 # Setup module-level logger
 logger = logging.getLogger("agentshield.attacks.base")
@@ -33,10 +34,11 @@ class Finding:
     owasp_id: str = ""
     cwe_id: str = ""
     fix: str = ""
-    finding_id: str = ""
+    finding_id: str = field(default_factory=lambda: f"AS-{uuid4().hex[:12].upper()}")
     timestamp: str = field(
-        default_factory=lambda: datetime.now().isoformat()
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+    status: str = "completed"
 
     def is_critical(self) -> bool:
         return self.severity == Severity.CRITICAL
@@ -57,6 +59,7 @@ class Finding:
             "owasp_id": self.owasp_id,
             "cwe_id": self.cwe_id,
             "fix": self.fix,
+            "status": self.status,
             "timestamp": self.timestamp,
         }
 
@@ -86,6 +89,7 @@ class BaseAttack(ABC):
         """
         payloads = self.generate_payloads()
         successes: List[Tuple[str, str]] = []
+        failures: List[str] = []
 
         logger.info(f"Executing attack module '{self.name}' with {len(payloads)} payloads.")
 
@@ -95,11 +99,11 @@ class BaseAttack(ABC):
                 response = target.query(payload)
                 if not isinstance(response, str):
                     response = str(response)
-            except Exception as e:
-                logger.error(f"[{self.name}] Target query failed on payload {i}: {str(e)}")
-                response = f"[ERROR: Target execution failed: {str(e)}]"
+            except Exception as exc:
+                logger.exception("[%s] Target query failed on payload %s", self.name, i)
+                failures.append(f"Payload {i}: {exc}")
+                continue
 
-            # Evaluate success
             if self.evaluate(response, payload):
                 successes.append((payload, response))
                 logger.warning(f"[{self.name}] ⚠️ Payload {i} succeeded (Vulnerability found!)")
@@ -107,12 +111,21 @@ class BaseAttack(ABC):
                 logger.debug(f"[{self.name}] ✅ Payload {i} blocked.")
 
         # Calculate score and severity
-        score = len(successes) / max(len(payloads), 1) * 10
+        completed_count = len(payloads) - len(failures)
+        score = len(successes) / completed_count * 10 if completed_count else 0.0
         severity = self._score_to_severity(score)
 
         evidence = successes[0][0] if successes else "No successful payloads"
         agent_response = successes[0][1] if successes else "All payloads blocked"
         fix = self._suggest_fix()
+        status = "completed"
+        if failures:
+            status = "failed" if completed_count == 0 else "incomplete"
+            evidence = (
+                f"{len(failures)} of {len(payloads)} payload requests failed. "
+                + "; ".join(failures)
+            )
+            agent_response = "One or more payloads could not be tested."
 
         return Finding(
             attack_name=self.name,
@@ -124,6 +137,7 @@ class BaseAttack(ABC):
             owasp_id=self.owasp_id,
             cwe_id=self.cwe_id,
             fix=fix,
+            status=status,
         )
 
     def _score_to_severity(self, score: float) -> Severity:

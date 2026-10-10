@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>AgentShield</title>
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <a class="brand" href="/">AgentShield<span>SECURITY TESTING</span></a>
+        <div class="top-actions">
+          <button id="delete-account" class="button quiet hidden" type="button">Delete account</button>
+          <button id="logout" class="button quiet hidden" type="button">Sign out</button>
+        </div>
+      </header>
+
+      <section id="notice" class="notice hidden" role="status"></section>
+
+      <section id="auth-panel" class="panel auth-panel">
+        <p class="eyebrow">AI AGENT SECURITY</p>
+        <h1>Test your agent before attackers do.</h1>
+        <p class="muted">Run a prompt-based security scan against an OpenAI-compatible endpoint. This is a test tool, not a compliance certification.</p>
+        <div class="auth-grid">
+          <form id="register-form" class="stack">
+            <h2>Create account</h2>
+            <label>Email<input name="email" type="email" autocomplete="email" required maxlength="320"></label>
+            <label>Password<input name="password" type="password" autocomplete="new-password" minlength="12" required maxlength="256"></label>
+            <button class="button" type="submit">Create account</button>
+          </form>
+          <form id="login-form" class="stack">
+            <h2>Sign in</h2>
+            <label>Email<input name="email" type="email" autocomplete="username" required maxlength="320"></label>
+            <label>Password<input name="password" type="password" autocomplete="current-password" required maxlength="256"></label>
+            <button class="button secondary" type="submit">Sign in</button>
+            <button id="resend-verification" class="text-button" type="button">Resend verification email</button>
+            <button id="forgot-password" class="text-button" type="button">Forgot password?</button>
+          </form>
+        </div>
+        <form id="reset-form" class="stack hidden">
+          <h2>Choose a new password</h2>
+          <label>New password<input name="password" type="password" autocomplete="new-password" minlength="12" required maxlength="256"></label>
+          <button class="button" type="submit">Reset password</button>
+        </form>
+      </section>
+
+      <section id="dashboard" class="hidden">
+        <div class="intro">
+          <p class="eyebrow">WORKSPACE</p>
+          <h1>Security scans</h1>
+          <p id="account-email" class="muted"></p>
+        </div>
+        <section class="panel">
+          <h2>Start a scan</h2>
+          <p class="muted">Use an isolated test agent and credentials with minimal permissions. Tests may trigger real agent tools or change its state.</p>
+          <form id="scan-form" class="scan-grid">
+            <label>Scan name<input name="name" required maxlength="120" placeholder="Support agent staging"></label>
+            <label>OpenAI-compatible endpoint<input name="endpoint_url" type="url" required maxlength="2048" placeholder="https://example.com/v1/chat/completions"></label>
+            <label>Model<input name="model" required maxlength="120" placeholder="model-name"></label>
+            <label>API key<input name="api_key" type="password" required maxlength="4096" autocomplete="off"></label>
+            <label class="authorization">
+              <span><input name="authorized" type="checkbox" value="true" required> I own this agent or have permission to test it, and understand tests may trigger real actions.</span>
+            </label>
+            <button class="button" type="submit">Queue security scan</button>
+          </form>
+        </section>
+        <section class="scan-section">
+          <div class="section-heading"><h2>Recent scans</h2><button id="refresh" class="button quiet" type="button">Refresh</button></div>
+          <div id="scan-list" class="scan-list"></div>
+          <pre id="report" class="report hidden"></pre>
+        </section>
+      </section>
+      <footer>AgentShield provides prompt-based testing signals. Review findings; results are not proof that an agent is secure.</footer>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,97 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agentshield
+      POSTGRES_USER: agentshield
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentshield -d agentshield"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [internal]
+
+  migrate:
+    build: .
+    restart: "no"
+    env_file: .env
+    environment:
+      AGENTSHIELD_DATABASE_URL: postgresql+psycopg://agentshield:${POSTGRES_PASSWORD}@db:5432/agentshield
+      AGENTSHIELD_FRONTEND_URL: ${AGENTSHIELD_FRONTEND_URL:?Set AGENTSHIELD_FRONTEND_URL in .env}
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal]
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      AGENTSHIELD_DATABASE_URL: postgresql+psycopg://agentshield:${POSTGRES_PASSWORD}@db:5432/agentshield
+      AGENTSHIELD_FRONTEND_URL: ${AGENTSHIELD_FRONTEND_URL:?Set AGENTSHIELD_FRONTEND_URL in .env}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; from urllib.parse import urlsplit; req=urllib.request.Request('http://127.0.0.1:8000/healthz',headers={'Host':urlsplit(os.environ['AGENTSHIELD_FRONTEND_URL']).netloc}); urllib.request.urlopen(req,timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      AGENTSHIELD_DATABASE_URL: postgresql+psycopg://agentshield:${POSTGRES_PASSWORD}@db:5432/agentshield
+    command: ["agentshield-worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    pids_limit: 128
+    networks: [internal]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      AGENTSHIELD_HOST: ${AGENTSHIELD_HOST:?Set AGENTSHIELD_HOST to your public DNS name}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [internal]
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    driver: bridge

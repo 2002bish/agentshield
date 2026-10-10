@@ -1,0 +1,10 @@
+{$AGENTSHIELD_HOST} {
+	encode zstd gzip
+	reverse_proxy api:8000 {
+		header_up X-Real-IP {remote_ip}
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+}

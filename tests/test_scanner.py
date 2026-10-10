@@ -39,6 +39,8 @@ class AgentScannerTests(unittest.TestCase):
         self.assertEqual(finding["attack_name"], "BrokenAttack")
         self.assertEqual(finding["severity"], Severity.INFO.value)
         self.assertEqual(finding["evidence"], "initialization failed")
+        self.assertEqual(report["summary"]["status"], "incomplete")
+        self.assertIsNone(report["summary"]["overall_safety_score_percentage"])
 
     def test_privilege_escalation_checks_response_for_compliance(self):
         attack = PrivilegeEscalation()
